@@ -121,6 +121,7 @@ parser.add_argument("--use-hyperbolic",action='store_true',help="Adds hyperbolic
 parser.add_argument("--alternate-start",action='store_true',help="Currently just passses first-iteration-jumpstart to start from CIP")
 parser.add_argument("--chip-replace",action='store_true',help="Replaces chi_p with chi_prms in prod default configuration")
 parser.add_argument("--chip-flat",action='store_true',help="Replaces CIP settings to make a flat strategy using chi_prms")
+parser.add_argument("--hlmoft-frames",action='store_true',help="If enabled, builds h(t) frames from hlm(t)")
 opts =  parser.parse_args()
 
 config = configparser.ConfigParser(allow_no_value=True) #SafeConfigParser deprecated from py3.2
@@ -222,6 +223,8 @@ else:
     # Loop over instruments, write frame files and cache
     for ifo in ifos:
         cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(indx, t_start,t_stop,ifo, approx_str)
+        if opts.hlmoft_frames:
+            cmd += ' --gen-hlmoft '
         print(cmd)
         os.system(cmd)
         
@@ -243,13 +246,16 @@ else:
         sample_times = np.array(data.times)
         
         # plot domain - don't do this for combined frames
-        max_amp = np.argmax(strain)        
-        plot_domain = [sample_times[max_amp] - 1.0, sample_times[max_amp] + 0.5]
+        max_amp = np.argmax(strain)
+        seglen = int(config.get('engine','seglen'))
+        domain_start = seglen - 2 + 1
+        plot_domain = [sample_times[max_amp] - domain_start, sample_times[max_amp] + 3.0]
         
         plt.plot(sample_times, data, label=f'{channel}')
-        plt.xlim(plot_domain)
         plt.legend(loc='best')
-        plt.savefig(f'{channel}_plot.png', bbox_inches='tight')
+        plt.savefig(f'{channel}_plot_full.png', bbox_inches='tight')        
+        plt.xlim(plot_domain)
+        plt.savefig(f'{channel}_plot_seglen.png', bbox_inches='tight')
         plt.close()
         
     if not use_noise:
