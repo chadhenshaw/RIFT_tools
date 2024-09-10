@@ -122,6 +122,7 @@ parser.add_argument("--alternate-start",action='store_true',help="Currently just
 parser.add_argument("--chip-replace",action='store_true',help="Replaces chi_p with chi_prms in prod default configuration")
 parser.add_argument("--chip-flat",action='store_true',help="Replaces CIP settings to make a flat strategy using chi_prms")
 parser.add_argument("--hlmoft-frames",action='store_true',help="If enabled, builds h(t) frames from hlm(t)")
+parser.add_argument("--event", type=int, default=0, help='Event number. ADVANCED USERS ONLY')
 opts =  parser.parse_args()
 
 config = configparser.ConfigParser(allow_no_value=True) #SafeConfigParser deprecated from py3.2
@@ -215,14 +216,14 @@ else:
     t_start = int(fiducial_event_time)-150
     t_stop = int(fiducial_event_time)+150
 
-    indx = 0 # need an event number, meaningless otherwise
+    indx = opts.event # need an event number, meaningless otherwise
     target_subdir = 'signal_frames/event_{}'.format(indx) # this is where the signal frames will go
     mkdir(working_dir_full+"/"+target_subdir)
     os.chdir(working_dir_full+"/"+target_subdir)
     # here we're in the signal_frames/event_0 directory.
     # Loop over instruments, write frame files and cache
     for ifo in ifos:
-        cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(indx, t_start,t_stop,ifo, approx_str)
+        cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
         if opts.hlmoft_frames:
             cmd += ' --gen-hlmoft '
         print(cmd)
@@ -367,7 +368,7 @@ os.chdir(working_dir_full)
 
 if not(bypass_frames):
     # write coinc file
-    cmd = "util_SimInspiralToCoinc.py --sim-xml mdc.xml.gz --event {}".format(indx)
+    cmd = "util_SimInspiralToCoinc.py --sim-xml mdc.xml.gz --event {}".format(0) # Note that event is always zero here
     for ifo in ifos:
         cmd += "  --ifo {} ".format(ifo)
     os.system(cmd)
@@ -542,9 +543,9 @@ for file_path in file_paths:
             requirements_line = "requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN)" + "&&" + avoid_string + "\n"
             lines[requirements_index] = requirements_line
             # Insert the 'require_gpus' line before the 'queue' command
-            lines.insert(queue_index, "require_gpus = Capability >= 3.5\n")
-            if not(opts.use_hyperbolic):
-                lines.insert(queue_index, "gpus_minimum_memory = 6GB\n")
+            #lines.insert(queue_index, "require_gpus = Capability >= 3.5\n")
+            lines.insert(queue_index, "gpus_minimum_capability = 3.5\n")            
+            lines.insert(queue_index, "gpus_minimum_memory = 6GB\n")
         else:
             requirements_line = "requirements = " + avoid_string + "\n"
             lines[requirements_index] = requirements_line

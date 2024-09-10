@@ -137,7 +137,13 @@ def load_init_grid_data(grid, dat_path, net_path, hyperbolic=False):
 def ppc(dat_path, net_path, iteration, coord_list):
     os.chdir(plot_dest) 
     
-    ppc_cmd = f'plot_posterior_corner.py --posterior-file {dat_path} --composite-file {net_path} --truth-file {truth_xml} --ci-list [1.0] --use-all-composite-but-grayscale --lnL-cut 40.0 '
+    ppc_cmd = f'plot_posterior_corner.py --posterior-file {dat_path} --composite-file {net_path} --truth-file {truth_xml} --ci-list [1.0] '
+    
+    # forcing m range for now
+    
+    #ppc_cmd += ' --bind-param mc --param-bound "[22.0, 30.0]" '
+    
+    #if args.lnL_cut - need to add this logic in
 
     for coord in coord_list:
         ppc_cmd += f' --parameter {coord} '
@@ -212,7 +218,7 @@ for indx, grid in enumerate(grid_files[1:]):
         total_comp = comp_list[0]
     
     else:
-        # add together
+        # add together - this is wrong I think
         add_cmd = 'util_CleanILE.py '
         if hyperbolic:
             add_cmd += ' --hyperbolic '
