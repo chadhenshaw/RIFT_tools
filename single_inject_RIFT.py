@@ -123,6 +123,8 @@ parser.add_argument("--chip-replace",action='store_true',help="Replaces chi_p wi
 parser.add_argument("--chip-flat",action='store_true',help="Replaces CIP settings to make a flat strategy using chi_prms")
 parser.add_argument("--hlmoft-frames",action='store_true',help="If enabled, builds h(t) frames from hlm(t)")
 parser.add_argument("--event", type=int, default=0, help='Event number. ADVANCED USERS ONLY')
+parser.add_argument("--force-snr", type=float, default=None, help='Rescales the injection distance to acheive the chosen SNR')
+parser.add_argument("--use-osdf", action='store_true', help='Uses OSDF file transfer instead of CVMFS')
 opts =  parser.parse_args()
 
 config = configparser.ConfigParser(allow_no_value=True) #SafeConfigParser deprecated from py3.2
@@ -188,6 +190,10 @@ P.phiref = float(config.get('injection-parameters','phase'))
 # Other waveform settings
 P.fmin = float(config.get('injection-parameters','fmin'))
 
+if not(opts.force_snr == None):
+    P.scale_to_snr(new_SNR=opts.force_snr, psd=lalsim.SimNoisePSDaLIGOZeroDetHighPower, ifo_list=ifos)
+    
+
 P_list.append(P)
 
 # create mdc.xml.gz - contains all injection params
@@ -205,7 +211,7 @@ else:
 
 if bypass_frames:
     print("Skipping frame creation")
-    indx = 0
+    indx = opts.event
     pass
 else:
     # create clean signal frames #
@@ -224,8 +230,12 @@ else:
     # Loop over instruments, write frame files and cache
     for ifo in ifos:
         cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
+        #cmd = "util_LALWriteFrame_test.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
         if opts.hlmoft_frames:
             cmd += ' --gen-hlmoft '
+            
+        #if opts.use_hyperbolic:
+        #    cmd += ' --hyperbolic '
         print(cmd)
         os.system(cmd)
         
@@ -546,6 +556,7 @@ for file_path in file_paths:
             #lines.insert(queue_index, "require_gpus = Capability >= 3.5\n")
             lines.insert(queue_index, "gpus_minimum_capability = 3.5\n")            
             lines.insert(queue_index, "gpus_minimum_memory = 6GB\n")
+            lines.insert(queue_index, 'MY.UNDESIRED_Sites = "SDSC-PRP"\n')
         else:
             requirements_line = "requirements = " + avoid_string + "\n"
             lines[requirements_index] = requirements_line
@@ -588,20 +599,24 @@ if opts.use_hyperbolic and opts.use_osg:
         #current_singularity_image = 'rift_o4b_jl-chadhenshaw-teobresums_eccentric-2024-05-14_12-02-56.sif'
         #sif_path = 'osdf:///igwn/cit/staging/james.clark/' + current_singularity_image
         
-        #current_singularity_image = 'rift_o4b_jl-2024-07-16_12-21-57.sif'
-       # sif_path = 'osdf:///igwn/cit/staging/chad.henshaw/' + current_singularity_image
-    
-        current_singularity_image = '/cvmfs/singularity.opensciencegrid.org/james-clark/research-projects-rit/containers-rift_o4b_jl-chadhenshaw-teobresums_eccentric:latest'
+        if opts.use_osdf:
+            current_singularity_image = 'rift_o4b_jl-2024-09-25_12-39-46.sif'
+            sif_path = 'osdf:///igwn/cit/staging/chad.henshaw/' + current_singularity_image
+        else:    
+            current_singularity_image = '/cvmfs/singularity.opensciencegrid.org/james-clark/research-projects-rit/containers-rift_o4b_jl-chadhenshaw-teobresums_eccentric:latest'
         
         with open(input_file, 'r') as file:
             lines = file.readlines()
-    
-        #lines_to_remove = ['getenv', '+SingularityBindCVMFS', '+SingularityImage']
-        lines_to_remove = ['getenv']
-        #lines_to_add = [f'MY.SingularityImage = "{current_singularity_image}"', 'use_oauth_services = scitokens']
-        lines_to_add = []
-        #modifications = {'request_disk': 'request_disk = 3G', 'requirements': 'requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN=?=TRUE)', 'transfer_input_files': None}
-        modifications = {'request_disk': 'request_disk = 50M', 'requirements': 'requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN=?=TRUE)&&(TARGET.Machine =!= "deepclean.ldas.cit")'}
+            
+        if opts.use_osdf:
+            lines_to_remove = ['getenv', '+SingularityBindCVMFS', '+SingularityImage']
+            lines_to_add = [f'MY.SingularityImage = "{current_singularity_image}"', 'use_oauth_services = scitokens']
+            modifications = {'request_disk': 'request_disk = 3G', 'requirements': 'requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN=?=TRUE)&&(TARGET.Machine =!= "deepclean.ldas.cit")', 'transfer_input_files': None}
+        
+        else:
+            lines_to_remove = ['getenv']
+            lines_to_add = []
+            modifications = {'request_disk': 'request_disk = 50M', 'requirements': 'requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN=?=TRUE)&&(TARGET.Machine =!= "deepclean.ldas.cit")'}
 
         modified_lines = []
         queue_line = None
@@ -618,8 +633,10 @@ if opts.use_hyperbolic and opts.use_osg:
             for key, new_value in modifications.items():
                 if stripped_line.startswith(key):
                     if key == 'transfer_input_files':
-                        #line = stripped_line + ',' + sif_path + '\n'
-                        print('skipping this for cvfms')
+                        if opts.use_osdf:
+                            line = stripped_line + ',' + sif_path + '\n'
+                        else:
+                            print('skipping this for cvfms')
                     else:
                         line = new_value + '\n'
                     modified_lines.append(line)
