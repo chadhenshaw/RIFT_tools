@@ -339,7 +339,12 @@ if not opts.use_noise:
         print('SNR report already exists, skipping')
         pass
     else:
-        cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache --psd lalsim.SimNoisePSDaLIGOZeroDetHighPower"
+        #cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache --psd lalsim.SimNoisePSDaLIGOZeroDetHighPower"
+        cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache"
+        for ifo in ifos:
+            cmd += f' --psd-file {ifo}=/home/chad.henshaw/Injections/PSDs/O4/{ifo}-psd.xml.gz '
+            
+        print(cmd)
         os.system(cmd)
     with open('snr-report.txt', 'r') as file:
         snr_dict = ast.literal_eval(file.read())
