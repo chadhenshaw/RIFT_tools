@@ -555,7 +555,7 @@ for file_path in file_paths:
     if requirements_index is not None:
         #requirements_line = lines[requirements_index]
         if opts.use_osg:
-            requirements_line = "requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN)" + "&&" + avoid_string + "\n"
+            requirements_line = "requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN)&&(HAS_CVMFS_singularity_opensciencegrid_org=?=TRUE)" + "&&" + avoid_string + "\n"
             lines[requirements_index] = requirements_line
             # Insert the 'require_gpus' line before the 'queue' command
             #lines.insert(queue_index, "require_gpus = Capability >= 3.5\n")
@@ -621,7 +621,7 @@ if opts.use_hyperbolic and opts.use_osg:
         else:
             lines_to_remove = ['getenv']
             lines_to_add = []
-            modifications = {'request_disk': 'request_disk = 50M', 'requirements': 'requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN=?=TRUE)&&(TARGET.Machine =!= "deepclean.ldas.cit")'}
+            modifications = {'request_disk': 'request_disk = 50M', 'requirements': 'requirements = (HAS_SINGULARITY=?=TRUE)&&(IS_GLIDEIN=?=TRUE)&&(TARGET.Machine =!= "deepclean.ldas.cit")&&(HAS_CVMFS_singularity_opensciencegrid_org=?=TRUE)'}
 
         modified_lines = []
         queue_line = None
