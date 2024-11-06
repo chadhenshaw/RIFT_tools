@@ -190,8 +190,18 @@ P.phiref = float(config.get('injection-parameters','phase'))
 # Other waveform settings
 P.fmin = float(config.get('injection-parameters','fmin'))
 
-if not(opts.force_snr == None):
-    P.scale_to_snr(new_SNR=opts.force_snr, psd=lalsim.SimNoisePSDaLIGOZeroDetHighPower, ifo_list=ifos)
+config_snr = config.get('injection-parameters', 'SNR', fallback=None)
+
+if not(opts.force_snr == None) or not(config_snr == None):
+    # Use opts.force_snr if it’s set, otherwise fallback to the config file SNR
+    if not(opts.force_snr == None):
+        print('Rescaling distance based on force-snr')
+        snr_value = opts.force_snr
+    else:
+        print('Rescaling distance based on config SNR')
+        snr_value = opts.force_snr
+        snr_value = float(config_snr)
+    P.scale_to_snr(new_SNR=snr_value, psd=lalsim.SimNoisePSDaLIGOZeroDetHighPower, ifo_list=ifos)
     
 
 P_list.append(P)
