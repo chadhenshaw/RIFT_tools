@@ -125,6 +125,7 @@ parser.add_argument("--hlmoft-frames",action='store_true',help="If enabled, buil
 parser.add_argument("--event", type=int, default=0, help='Event number. ADVANCED USERS ONLY')
 parser.add_argument("--force-snr", type=float, default=None, help='Rescales the injection distance to acheive the chosen SNR')
 parser.add_argument("--use-osdf", action='store_true', help='Uses OSDF file transfer instead of CVMFS')
+parser.add_argument("--limit-frame-modes", action='store_true', help='Passes lmax from the config to util_LALWriteFrame')
 opts =  parser.parse_args()
 
 config = configparser.ConfigParser(allow_no_value=True) #SafeConfigParser deprecated from py3.2
@@ -190,6 +191,8 @@ P.phiref = float(config.get('injection-parameters','phase'))
 # Other waveform settings
 P.fmin = float(config.get('injection-parameters','fmin'))
 
+lmax = int(config.get('rift-pseudo-pipe','l-max'))
+
 config_snr = config.get('injection-parameters', 'SNR', fallback=None)
 
 if not(opts.force_snr == None) or not(config_snr == None):
@@ -211,7 +214,12 @@ if bypass_frames:
     print("Skipping mdc creation")
     pass
 else:
-    lalsimutils.ChooseWaveformParams_array_to_xml(P_list,"mdc")
+    if opts.event == 0:
+        mdc_name = 'mdc'        
+    else:
+        mdc_name = f"mdc_{opts.event}"
+        
+    lalsimutils.ChooseWaveformParams_array_to_xml(P_list,f"{mdc_name}")
 
     
     
@@ -239,10 +247,13 @@ else:
     # here we're in the signal_frames/event_0 directory.
     # Loop over instruments, write frame files and cache
     for ifo in ifos:
-        cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
+        cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/{}.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(mdc_name, 0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
         #cmd = "util_LALWriteFrame_test.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
         if opts.hlmoft_frames:
             cmd += ' --gen-hlmoft '
+            
+        if opts.limit_frame_modes:
+            cmd += f' --l-max {lmax} '
             
         #if opts.use_hyperbolic:
         #    cmd += ' --hyperbolic '
@@ -393,7 +404,7 @@ os.chdir(working_dir_full)
 
 if not(bypass_frames):
     # write coinc file
-    cmd = "util_SimInspiralToCoinc.py --sim-xml mdc.xml.gz --event {}".format(0) # Note that event is always zero here
+    cmd = "util_SimInspiralToCoinc.py --sim-xml {}.xml.gz --event {}".format(mdc_name, 0) # Note that event is always zero here
     for ifo in ifos:
         cmd += "  --ifo {} ".format(ifo)
     os.system(cmd)
