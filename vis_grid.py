@@ -23,6 +23,7 @@ import glob
 from RIFT.misc.dag_utils import mkdir
 import argparse
 import re
+import subprocess
 
 
 ## Argparse ##
@@ -30,7 +31,8 @@ import re
 parser = argparse.ArgumentParser()
 parser.add_argument("--analysis-dir", default=None, type=str, required=True, help="REQUIRED. Path to analysis directory.")
 parser.add_argument("--hyperbolic",action='store_true',help="Enable for hyperbolic analyses.")
-parser.add_argument("--alt-coord-list", default=None, type=str, help="List of coordinates to plot")
+parser.add_argument("--alt-coord-list", nargs='+', default=None, type=str, help="List of coordinates to plot")
+parser.add_argument("--highlight-puff",action='store_true', help="displays puff points as *")
 opts =  parser.parse_args()
 
 hyperbolic = False
@@ -42,6 +44,7 @@ if opts.hyperbolic:
 
 ad_path = os.path.abspath(opts.analysis_dir)
 meta_path = os.path.dirname(ad_path)
+ppc_alternate = os.path.join(os.path.dirname(__file__), 'ppc_alternate.py')
 
 os.chdir(ad_path)
 mkdir('vis_plots')
@@ -133,11 +136,83 @@ def load_init_grid_data(grid, dat_path, net_path, hyperbolic=False):
     
     return
 
-
-def ppc(dat_path, net_path, iteration, coord_list):
-    os.chdir(plot_dest) 
+def split_puff_composite(ad_path):
+    for folder in sorted(os.listdir(ad_path)):
+        if folder.startswith("iteration_") and folder.endswith("_ile"):
+            print(f'Now processing {folder}')
+            # extract iteration # from folder name
+            x_val = folder.split('_')[1]
+            
+            #if x_val == "0":
+                # no need to parse iteration 0
+            #    continue
+            
+            folder_path = os.path.join(ad_path, folder)
+            
+            # define paths for composite output files
+            puff_output_file = os.path.join(folder_path, f"consolidated_puff_{x_val}.composite")
+            grid_output_file = os.path.join(folder_path, f"consolidated_grid_{x_val}.composite")
+            
+            # Skip processing if both composite files exist and are not empty
+            if os.path.exists(puff_output_file) and os.path.getsize(puff_output_file) > 0 and \
+               os.path.exists(grid_output_file) and os.path.getsize(grid_output_file) > 0:
+                print(f"Both puff and grid composites already exist for iteration {x_val}. Skipping.")
+                continue
+            
+            # Temp files for intermediate concatenation
+            puff_temp = os.path.join(folder_path, f"tmp_puff_{x_val}.dat")
+            grid_temp = os.path.join(folder_path, f"tmp_grid_{x_val}.dat")
+            
+            # Find and concatenate puff and grid files
+            print("Joining puff files...")
+            subprocess.run(
+                f"find {folder_path} -type f -name '*puff*.dat' ! -name 'tmp_puff_{x_val}.dat' -exec cat {{}} + > {puff_temp}", 
+                shell=True, check=True
+            )
+            
+            print("Joining grid files...")
+            subprocess.run(
+                f"find {folder_path} -type f -name 'CME*.dat' ! -name '*puff*.dat' ! -name 'tmp_grid_{x_val}.dat' -exec cat {{}} + > {grid_temp}", 
+                shell=True, check=True
+            )
+            
+            # Run util_CleanILE.py and sort its output
+            print("Processing puff files with util_CleanILE.py...")
+            with open(puff_output_file, 'w') as puff_out:
+                subprocess.run(
+                    f"util_CleanILE.py {puff_temp} | sort -rg -k10",
+                    shell=True, stdout=puff_out, check=True
+                )
+                
+            print("Processing grid files with util_CleanILE.py...")
+            with open(grid_output_file, 'w') as grid_out:
+                subprocess.run(
+                    f"util_CleanILE.py {grid_temp} | sort -rg -k10",
+                    shell=True, stdout=grid_out, check=True
+                )
+            
+            # Clean up temp files
+            os.remove(puff_temp)
+            os.remove(grid_temp)
     
-    ppc_cmd = f'plot_posterior_corner.py --posterior-file {dat_path} --composite-file {net_path} --truth-file {truth_xml} --ci-list [1.0] '
+
+
+def ppc(dat_path, net_path, iteration, coord_list, grid_comp_path=None, puff_comp_path=None):
+    
+    
+    os.chdir(plot_dest)
+    
+    if opts.highlight_puff:
+        
+        if iteration==0:
+            ppc_cmd = f'{ppc_alternate} --posterior-file {dat_path} --composite-file {net_path} --truth-file {truth_xml} --ci-list [1.0] '
+        else:        
+            ppc_cmd = f'{ppc_alternate} --posterior-file {dat_path} --grid-composite-file {grid_comp_path} --puff-composite-file {puff_comp_path} --truth-file {truth_xml} --ci-list [1.0] '
+        
+    else:
+    
+        ppc_cmd = f'plot_posterior_corner.py --posterior-file {dat_path} --composite-file {net_path} --truth-file {truth_xml} --ci-list [1.0] '
+        #ppc_cmd = f'{ppc_alternate} --posterior-file {dat_path} --composite-file {net_path} --truth-file {truth_xml} --ci-list [1.0] '
     
     # forcing m range for now
     
@@ -166,6 +241,11 @@ def ppc(dat_path, net_path, iteration, coord_list):
 
 
 #load_grid_data(first_grid)
+
+
+
+    
+
 
 
 ## Define plot coordinates ##
@@ -204,38 +284,102 @@ ppc(init_dat_path, init_net_path, iteration=0, coord_list=coord_list)
 #print('Stopping here')
 #sys.exit(0)
 
-# iterate through remaining grids
-comp_list = []
-for indx, grid in enumerate(grid_files[1:]):
-    dat_indx = int(indx + 1)
-    print(f'Visualizing iteration {dat_indx}')
-    dat_path = os.path.join(ad_path, f'posterior_samples-{dat_indx}.dat')
+
+## Puff highlight ##
+
+if opts.highlight_puff:
     
-    comp_list.append(os.path.join(ad_path, f'consolidated_{indx}.composite'))
+    split_puff_composite(ad_path)
     
-    # need to add together comp files
-    if len(comp_list) == 1:
-        total_comp = comp_list[0]
+    comp_list_grid = []
+    comp_list_puff = []
     
-    else:
-        # add together - this is wrong I think
-        add_cmd = 'util_CleanILE.py '
-        if hyperbolic:
-            add_cmd += ' --hyperbolic '
+    for indx, grid in enumerate(grid_files[1:]):
+        dat_indx = int(indx + 1)
+        print(f'Visualizing iteration {dat_indx}')
+        dat_path = os.path.join(ad_path, f'posterior_samples-{dat_indx}.dat')
         
-        for comp in comp_list:
-            add_cmd += f' {comp} '
+        comp_path_grid = os.path.join(ad_path, f'iteration_{indx}_ile/consolidated_grid_{indx}.composite')
+        comp_path_puff = os.path.join(ad_path, f'iteration_{indx}_ile/consolidated_puff_{indx}.composite')
+        
+        comp_list_grid.append(comp_path_grid)
+        
+        # no puff points on zeroth iteration
+        if dat_indx > 1:            
+            comp_list_puff.append(comp_path_puff)
+        
+        # need to add together comp files
+        if len(comp_list_grid) == 1:
+            total_comp_grid = comp_list_grid[0]
+            total_comp_puff = None
             
-        total_comp = os.path.join(plot_dest, 'tmp_all.composite')
-        
-        add_cmd += f' > {total_comp} '
-        
-        print(add_cmd)
-        os.system(add_cmd)
-        
-    net_path = total_comp
+        else:
+            # add together grid composites
+            add_cmd_grid = 'util_CleanILE.py '
+            if hyperbolic:
+                add_cmd_grid += ' --hyperbolic '
+                
+            for comp_grid in comp_list_grid:
+                add_cmd_grid += f' {comp_grid} '
+                
+            total_comp_grid = os.path.join(plot_dest, 'tmp_grid_all.composite')
+            
+            add_cmd_grid += f' > {total_comp_grid} '
+            
+            print(add_cmd_grid)
+            os.system(add_cmd_grid) # produces total_grid_comp
+            
+            # add together puff composites
+            add_cmd_puff = 'util_CleanILE.py '
+            if hyperbolic:
+                add_cmd_puff += ' --hyperbolic '
+                
+            for comp_puff in comp_list_puff:
+                add_cmd_puff += f' {comp_puff} '
+                
+            total_comp_puff = os.path.join(plot_dest, 'tmp_puff_all.composite')
+            
+            add_cmd_puff += f' > {total_comp_puff} '
+            
+            print(add_cmd_puff)
+            os.system(add_cmd_puff) # produces total_puff_comp
+            
+        ppc(dat_path=dat_path, net_path=None, iteration=dat_indx, coord_list=coord_list, grid_comp_path=total_comp_grid, puff_comp_path=total_comp_puff)
+            
     
-    ppc(dat_path, net_path, iteration=dat_indx, coord_list=coord_list)
+else:
+    # iterate through remaining grids
+    comp_list = []
+    for indx, grid in enumerate(grid_files[1:]):
+        dat_indx = int(indx + 1)
+        print(f'Visualizing iteration {dat_indx}')
+        dat_path = os.path.join(ad_path, f'posterior_samples-{dat_indx}.dat')
+
+        comp_list.append(os.path.join(ad_path, f'consolidated_{indx}.composite'))
+
+        # need to add together comp files
+        if len(comp_list) == 1:
+            total_comp = comp_list[0]
+
+        else:
+            # add together - this is wrong I think
+            add_cmd = 'util_CleanILE.py '
+            if hyperbolic:
+                add_cmd += ' --hyperbolic '
+
+            for comp in comp_list:
+                add_cmd += f' {comp} '
+
+            total_comp = os.path.join(plot_dest, 'tmp_all.composite')
+
+            add_cmd += f' > {total_comp} '
+
+            print(add_cmd)
+            os.system(add_cmd)
+
+        net_path = total_comp
+
+        ppc(dat_path, net_path, iteration=dat_indx, coord_list=coord_list)
             
     
                             
