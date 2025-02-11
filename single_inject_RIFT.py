@@ -126,6 +126,7 @@ parser.add_argument("--event", type=int, default=0, help='Event number. ADVANCED
 parser.add_argument("--force-snr", type=float, default=None, help='Rescales the injection distance to acheive the chosen SNR')
 parser.add_argument("--use-osdf", action='store_true', help='Uses OSDF file transfer instead of CVMFS')
 parser.add_argument("--limit-frame-modes", action='store_true', help='Passes lmax from the config to util_LALWriteFrame')
+parser.add_argument("--force-frame-srate", action='store_true', help='Uses srate from the config file for frame generation')
 opts =  parser.parse_args()
 
 config = configparser.ConfigParser(allow_no_value=True) #SafeConfigParser deprecated from py3.2
@@ -159,6 +160,9 @@ ifos = unsafe_config_get(config,['analysis','ifos'])
 ################################################################
 #### Load Injection Parameters from config into lalsimutils ####
 ################################################################
+
+# segment length
+seglen = int(config.get('engine','seglen'))
 
 P_list = []
 P = lalsimutils.ChooseWaveformParams()
@@ -204,7 +208,7 @@ if not(opts.force_snr == None) or not(config_snr == None):
         print('Rescaling distance based on config SNR')
         snr_value = opts.force_snr
         snr_value = float(config_snr)
-    P.scale_to_snr(new_SNR=snr_value, psd=lalsim.SimNoisePSDaLIGOZeroDetHighPower, ifo_list=ifos)
+    P.scale_to_snr(new_SNR=snr_value, psd=lalsim.SimNoisePSDaLIGOZeroDetHighPower, ifo_list=ifos, Lmax=lmax)
     
 
 P_list.append(P)
@@ -247,7 +251,7 @@ else:
     # here we're in the signal_frames/event_0 directory.
     # Loop over instruments, write frame files and cache
     for ifo in ifos:
-        cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/{}.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(mdc_name, 0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
+        cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/{}.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {} --seglen {}".format(mdc_name, 0, t_start,t_stop,ifo, approx_str, seglen) # note that event is always zero here
         #cmd = "util_LALWriteFrame_test.py --inj " + working_dir_full+"/mdc.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {}".format(0, t_start,t_stop,ifo, approx_str) # note that event is always zero here
         if opts.hlmoft_frames:
             cmd += ' --gen-hlmoft '
@@ -255,8 +259,14 @@ else:
         if opts.limit_frame_modes:
             cmd += f' --l-max {lmax} '
             
-        #if opts.use_hyperbolic:
-        #    cmd += ' --hyperbolic '
+        if opts.use_hyperbolic:
+            cmd += ' --hyperbolic '
+            
+        if opts.force_frame_srate:
+            fs = int(float(config.get('engine','srate')))
+            cmd += f' --srate {fs} '
+            
+            
         print(cmd)
         os.system(cmd)
         
@@ -279,7 +289,7 @@ else:
         
         # plot domain - don't do this for combined frames
         max_amp = np.argmax(strain)
-        seglen = int(config.get('engine','seglen'))
+        #seglen = int(config.get('engine','seglen'))
         domain_start = seglen - 2 + 1
         plot_domain = [sample_times[max_amp] - domain_start, sample_times[max_amp] + 3.0]
         
@@ -362,8 +372,14 @@ if not opts.use_noise:
     else:
         #cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache --psd lalsim.SimNoisePSDaLIGOZeroDetHighPower"
         cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache"
+        PSD_files = unsafe_config_get(config,["make_psd",'fiducial_psds'])
         for ifo in ifos:
-            cmd += f' --psd-file {ifo}=/home/chad.henshaw/Injections/PSDs/O4/{ifo}-psd.xml.gz '
+            
+            #cmd += f' --psd-file {ifo}=/home/chad.henshaw/Injections/PSDs/O4/{ifo}-psd.xml.gz '
+            #cmd += f' --psd-file {ifo}=/home/chad.henshaw/Injections/PSDs/CE/C1_at_H1_fromascii_psd.xml.gz '
+            cmd += f" --psd-file {ifo}={PSD_files[ifo]} "
+            
+            #int(config.get('engine','seglen'))
             
         print(cmd)
         os.system(cmd)
@@ -404,10 +420,27 @@ os.chdir(working_dir_full)
 
 if not(bypass_frames):
     # write coinc file
-    cmd = "util_SimInspiralToCoinc.py --sim-xml {}.xml.gz --event {}".format(mdc_name, 0) # Note that event is always zero here
+    cmd = "util_SimInspiralToCoinc.py --sim-xml {}.xml.gz --event {} ".format(mdc_name, 0) # Note that the event getting passed is always zero here, but not the name
     for ifo in ifos:
         cmd += "  --ifo {} ".format(ifo)
+        
+    if not(opts.event == 0):
+        coinc_name = f'coinc_{opts.event}.xml'
+        cmd += f" --output {coinc_name} "
+    else:
+        # dumb backward compatibility
+        coinc_name = 'coinc.xml'
+        
     os.system(cmd)
+    
+else:
+    # still need the coinc name
+    if not(opts.event == 0):
+        coinc_name = f'coinc_{opts.event}.xml'
+    else:
+        # dumb backward compatibility
+        coinc_name = 'coinc.xml'
+    
 
 # Designate rundir 
 rundir = config.get('init','rundir')
@@ -416,7 +449,7 @@ rundir = config.get('init','rundir')
 target_file = 'combined_frames/event_{}/signals.cache'.format(indx)
 
 # RIFT analysis setup
-cmd = 'util_RIFT_pseudo_pipe.py --use-coinc `pwd`/coinc.xml --use-ini {} --use-rundir `pwd`/{} --fake-data-cache `pwd`/{}'.format(ini_path, rundir, target_file)
+cmd = 'util_RIFT_pseudo_pipe.py --use-coinc `pwd`/{} --use-ini {} --use-rundir `pwd`/{} --fake-data-cache `pwd`/{}'.format(coinc_name, ini_path, rundir, target_file)
 if opts.add_extrinsic:
     cmd += ' --add-extrinsic --add-extrinsic-time-resampling --batch-extrinsic '
 if not opts.use_noise:
