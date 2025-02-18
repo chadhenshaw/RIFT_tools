@@ -431,7 +431,7 @@ for file_path in file_paths:
             break
             
     if memory_index is not None:
-        memory_line = "request_memory = 30000M"
+        memory_line = "request_memory = 30000M\n"
         lines[memory_index] = memory_line
     
     # Modify lines
