@@ -33,6 +33,7 @@ parser.add_argument("--analysis-dir", default=None, type=str, required=True, hel
 parser.add_argument("--hyperbolic",action='store_true',help="Enable for hyperbolic analyses.")
 parser.add_argument("--alt-coord-list", nargs='+', default=None, type=str, help="List of coordinates to plot")
 parser.add_argument("--highlight-puff",action='store_true', help="displays puff points as *")
+parser.add_argument("--prec", action='store_true', help='Further settings for prec analysis')
 opts =  parser.parse_args()
 
 hyperbolic = False
@@ -226,8 +227,13 @@ def ppc(dat_path, net_path, iteration, coord_list, grid_comp_path=None, puff_com
 
     ppc_cmd += f' --posterior-label "it-{iteration}" --use-legend '
     
+    #if opts.prec:
+    #    ppc_cmd += ' --parameter chi_prms '
+    
     if hyperbolic:
         ppc_cmd += ' --hyperbolic '
+        # forcing ranges for now
+        ppc_cmd += ' --bind-param mtotal --param-bound "[10.0, 200.0]" --bind-param E0 --param-bound "[1.0, 1.1]" --bind-param p_phi0 --param-bound "[1.0, 10.0]" '
     
 
     print(ppc_cmd)
@@ -258,9 +264,13 @@ else:
     coord_list = default_intrinsic_coords
 
 if hyperbolic:
-    coord_list = ['mtotal', 'q', 'p_phi0', 'E0', 'chi_eff']
+    #coord_list = ['mtotal', 'q', 'p_phi0', 'E0', 'chi_eff']
+    coord_list = ['mtotal', 'q', 'p_phi0', 'E0']
     #coord_list.append('p_phi0')
     #coord_list.append('E0')
+    
+if opts.prec:
+    coord_list = ['mc', 'eta', 'chi_eff', 'chi_p', 'chi_prms']
 
 
 
