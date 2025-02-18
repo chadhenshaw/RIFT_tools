@@ -392,6 +392,11 @@ avoid_string = "&&".join(excluded_hosts)
 
 # List of file paths to modify
 file_paths = ["ILE.sub","ILE_puff.sub","iteration_4_cip/ILE.sub","iteration_4_cip/ILE_puff.sub"]
+
+CIP_files = ["CIP_0.sub", "CIP_1.sub", "CIP_2.sub", "CIP_3.sub", "CIP_worker0.sub", "CIP_worker1.sub", "CIP_worker2.sub", "CIP_worker3.sub", "CIP.sub", "CIP_worker.sub", "iteration_4_cip/CIP.sub", "iteration_4_cip/CIP_worker.sub"]
+
+for file in CIP_files:
+    file_paths.append(file)
     
 if opts.add_extrinsic:
     file_paths.append("ILE_extr.sub")
@@ -424,6 +429,10 @@ for file_path in file_paths:
         if line.strip().startswith("request_memory"):
             memory_index = i
             break
+            
+    if memory_index is not None:
+        memory_line = "request_memory = 30000M"
+        lines[memory_index] = memory_line
     
     # Modify lines
     if requirements_index is not None:
