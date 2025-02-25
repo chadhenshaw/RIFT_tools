@@ -34,6 +34,7 @@ parser.add_argument("--hyperbolic",action='store_true',help="Enable for hyperbol
 parser.add_argument("--alt-coord-list", nargs='+', default=None, type=str, help="List of coordinates to plot")
 parser.add_argument("--highlight-puff",action='store_true', help="displays puff points as *")
 parser.add_argument("--prec", action='store_true', help='Further settings for prec analysis')
+parser.add_argument("--full-extr", action='store_true', help='Plots all extrinsics instead of just sky location')
 opts =  parser.parse_args()
 
 hyperbolic = False
@@ -243,17 +244,6 @@ def ppc(dat_path, net_path, iteration, coord_list, grid_comp_path=None, puff_com
     os.rename(def_fig_name, os.path.join(plot_dest, f'it{iteration}_corner_'+'_'.join(coord_list)+'.png'))
     
     
-#param_postfix = "_".join(opts.parameter)
-
-
-#load_grid_data(first_grid)
-
-
-
-    
-
-
-
 ## Define plot coordinates ##
 
 default_intrinsic_coords = ['mc', 'eta', 'chi_eff', 'chi_p']
@@ -390,18 +380,37 @@ else:
         net_path = total_comp
 
         ppc(dat_path, net_path, iteration=dat_indx, coord_list=coord_list)
-            
-    
-                            
         
-        #net_path = # need to combine composite files
-
-
-
-
-
-
-# we now have two files: tmp_grid.dat (samples file) and vis-tmp_all.net (composite file)
-
-
-# next, we create plots
+    
+    #
+    #
+    # Now plot extrinsics
+    extr_samples = os.path.join(ad_path, "extrinsic_posterior_samples.dat")
+    all_file = os.path.join(ad_path, "all.net")
+    os.chdir(plot_dest)
+    if os.path.exists(extr_samples):
+        ppc_cmd = f'plot_posterior_corner.py --posterior-file {extr_samples} --composite-file {all_file} --truth-file {truth_xml} --ci-list [1.0] '
+        if hyperbolic:
+            ppc_cmd += ' --hyperbolic '
+            # forcing ranges for now
+            #ppc_cmd += ' --bind-param mtotal --param-bound "[10.0, 200.0]" --bind-param E0 --param-bound "[1.0, 1.1]" --bind-param p_phi0 --param-bound "[1.0, 10.0]" '
+        
+        if opts.full_extr:
+            print('Now plotting all extrinsics')
+            
+            ppc_cmd += ' --parameter distance --parameter ra --parameter dec --parameter phiorb --parameter incl --parameter psi --bind-param distance --param-bound "[10.0, 2000.0]" --bind-param ra --param-bound "[-0.5, 6.283]" --bind-param dec --param-bound "[-1.57, 1.57]" --bind-param phiorb --param-bound "[-0.5, 6.283]" --bind-param incl --param-bound "[-0.5, 3.141]" --bind-param psi --param-bound "[-0.5, 3.141]" '
+            
+            #extr_fig_name = os.path.join(plot_dest, 'corner_distance_ra_dec_phiorb_incl_psi.png')
+            
+        else:
+            print('Now plotting sky location')
+            
+            ppc_cmd += ' --parameter distance --parameter ra --parameter dec --bind-param distance --param-bound "[10.0, 2000.0]" --bind-param ra --param-bound "[-0.5, 6.283]" --bind-param dec --param-bound "[-1.57, 1.57]" '
+            #extr_fig_name = os.path.join(plot_dest, 'corner_distance_ra_dec.png')
+            #extr_fig_dest = os.path.join(plot_dest, 
+            
+        print(ppc_cmd)
+        os.system(ppc_cmd)
+            
+    else:
+        print('No extrinsics found, exiting...')
