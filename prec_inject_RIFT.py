@@ -70,6 +70,7 @@ parser.add_argument("--add-extrinsic",action='store_true',help="Add extrinsic po
 parser.add_argument("--force-cpu",action='store_true',help="Forces avoidance of GPUs")
 parser.add_argument("--bypass-frames",action='store_true',help="Skip making mdc and frame files, use with caution")
 parser.add_argument("--just-frames",action='store_true',help="Stop after making frame files, use with caution")
+parser.add_argument("--hlmoft-frames",action='store_true',help="If enabled, builds h(t) frames from hlm(t)")
 parser.add_argument("--chip-replace",action='store_true',help="Replaces chi_p with chi_prms in prod default configuration")
 parser.add_argument("--chip-flat",action='store_true',help="Replaces CIP settings to make a flat strategy using chi_prms")
 parser.add_argument("--force-snr", type=float, default=None, help='Rescales the injection distance to acheive the chosen SNR')
@@ -152,6 +153,14 @@ P.fmin = float(config.get('injection-parameters','fmin'))
 
 lmax = int(config.get('rift-pseudo-pipe','l-max'))
 
+## Determine deltaF from PSDs
+if seglen == 32:
+    deltaF = 0.031250
+elif seglen == 64:
+    deltaF = 0.015625
+elif seglen == 128:
+    deltaF = 0.0078125
+
 #config_snr = config.get('injection-parameters', 'SNR', fallback=None)
 
 #if not(config_snr == None):
@@ -197,6 +206,9 @@ else:
     # Loop over instruments, write frame files and cache
     for ifo in ifos:
         cmd = "util_LALWriteFrame.py --inj " + working_dir_full+"/{}.xml.gz --event {} --start {}  --stop {}  --instrument {} --approx {} --seglen {} ".format(mdc_name, 0, t_start,t_stop,ifo, approx_str, seglen) # note that event is always zero here
+        
+        if opts.hlmoft_frames:
+            cmd += ' --gen-hlmoft '
             
         if opts.force_frame_srate:
             fs = int(float(config.get('engine','srate')))
@@ -253,7 +265,7 @@ if os.path.exists(target_subdir_full + '/snr-report.txt'):
     print('SNR report already exists, skipping')
     pass
 else:
-    cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache --plot-sanity "
+    cmd = "util_FrameZeroNoiseSNR.py --cache signals.cache "
     fmin_snr, fmax_snr = PSD_freqs["H1"]
     cmd += f" --fmin-snr {fmin_snr} --fmax-snr {fmax_snr} "
     for ifo in ifos:
