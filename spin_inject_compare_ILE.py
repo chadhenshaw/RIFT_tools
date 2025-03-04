@@ -283,6 +283,9 @@ def run_ILE(xml, output_name):
     
     # Skip the first two lines and get the options line
     options_line = lines[2].strip()
+    # Clean up extraneous single quotes in the options line
+    options_line = options_line.replace("' --force-adapt-all '", "--force-adapt-all")
+    
     parts = options_line.split()
     
     # Dictionary of new values for specific options
@@ -438,14 +441,14 @@ if args.user_test:
         P_test[ifo] = P_truth[ifo].copy()
         
         # override intrinsics with test values
-        P_test[ifo].m1 = 49.35202*SM
-        P_test[ifo].m2 = 28.56881*SM
-        P_test[ifo].s1x = 0.0
-        P_test[ifo].s1y = 0.0
-        P_test[ifo].s1z = 0.0
-        P_test[ifo].s2x = 0.0
-        P_test[ifo].s2y = 0.0
-        P_test[ifo].s2z = 0.0
+        P_test[ifo].m1 = 20.58726*SM
+        P_test[ifo].m2 = 12.61201*SM
+        P_test[ifo].s1x = 0.37039
+        P_test[ifo].s1y = -0.05441
+        P_test[ifo].s1z = -0.01289
+        P_test[ifo].s2x = -0.15268
+        P_test[ifo].s2y = 0.28867
+        P_test[ifo].s2z = 0.71261
         #P_test[ifo].E0 = 1.06544
         #P_test[ifo].p_phi0 =  5.58298
             
