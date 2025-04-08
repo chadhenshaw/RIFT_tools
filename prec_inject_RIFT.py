@@ -76,11 +76,15 @@ parser.add_argument("--chip-flat",action='store_true',help="Replaces CIP setting
 parser.add_argument("--force-snr", type=float, default=None, help='Rescales the injection distance to acheive the chosen SNR')
 parser.add_argument("--use-osdf", action='store_true', help='Uses OSDF file transfer instead of CVMFS')
 parser.add_argument("--force-frame-srate", action='store_true', help='Uses srate from the config file for frame generation')
+parser.add_argument("--manual-initial-grid", default=None, type=str, help="Path to forced initial grid")
 opts =  parser.parse_args()
 
 config = configparser.ConfigParser(allow_no_value=True) #SafeConfigParser deprecated from py3.2
 
 ini_path = os.path.abspath(opts.use_ini)
+
+if not(opts.manual_initial_grid is None):
+    forced_grid_path = os.path.abspath(opts.manual_initial_grid)
 
 # read in config
 config.read(ini_path)
@@ -343,6 +347,9 @@ if opts.use_osg:
     cmd += ' --use-osg-file-transfer '
     cmd += ' --ile-retries 10 '
     # note: --use-osg-cip not used by default - can set this in the ini file
+
+if not(opts.manual_initial_grid is None):
+    cmd += f' --manual-initial-grid {forced_grid_path} '
     
 os.system(cmd)   
           
